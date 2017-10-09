@@ -1,61 +1,29 @@
-# trusty beta image has jdk8, gcc4.8.4
 dist: trusty
 sudo: required
-# xcode8 has jdk8
-osx_image: xcode8
-# Not technically required but suppresses 'Ruby' in Job status message.
-language: java
-
+language: go
+go:
+- 1.9
 os:
-  - linux
-  - osx
-
+- linux
 env:
+  global:
+  - TRAVIS_CI=true
   - V=0.6.1
-
-before_install:
-  - |
-    if [[ "${TRAVIS_OS_NAME}" == "osx" ]]; then
-      OS=darwin
-    else
-      sysctl kernel.unprivileged_userns_clone=1
-      OS=linux
-    fi
-    if [[ "${V}" == "HEAD" ]]; then
-      # Determine last successful build number. This may change while we are
-      # downloading, so it's important to determine ahead of time, in case
-      # we need to resume the download.
-      CI_BASE="http://ci.bazel.io/view/Bazel%20bootstrap%20and%20maintenance/job/Bazel/PLATFORM_NAME=${OS}-x86_64/"
-      CI_INDEX_URL="${CI_BASE}/lastSuccessfulBuild/"
-      wget -q -O build-index.html "${CI_INDEX_URL}"
-      CI_BUILD=$(grep '<title>' build-index.html | sed -e 's/^.*#\([0-9]*\).*$/\1/')
-
-      # Determine the artifact name. This is normally, bazel--installer.sh,
-      # but it may be, for example, bazel-0.5rc2-installer.sh before a release.
-      CI_ARTIFACT=$(grep -o 'bazel-[^\"-]*-installer.sh' build-index.html | head -n 1)
-      URL="${CI_BASE}/${CI_BUILD}/artifact/output/ci/${CI_ARTIFACT}"
-      rm build-index.html
-    else
-      URL="https://github.com/bazelbuild/bazel/releases/download/${V}/bazel-${V}-installer-${OS}-x86_64.sh"
-    fi
-    wget -O install.sh "${URL}"
-    chmod +x install.sh
-    ./install.sh --user
-    rm -f install.sh
-
 script:
-  - |
-    bazel \
-      --output_base=$HOME/.cache/bazel \
-      --batch \
-      --host_jvm_args=-Xmx500m \
-      --host_jvm_args=-Xms500m \
-      --bazelrc=.test-bazelrc \
-      test \
-      --experimental_repository_cache="$HOME/.bazel_repository_cache" \
-      --local_resources=400,1,1.0 \
-      --test_tag_filters=-dev \
-      //...
-
-notifications:
-  email: false
+- true
+before_deploy: bash npm/publish.sh
+deploy:
+#- provider: releases
+#  local_dir: build/bin
+#  api_key:
+#    secure: oBURtW0bCaINtmrvZzivBthG1eVGnfLWLpatFhMnhLQ5mSIVmf6ia1bxbyzLY3dzLi43y6Nwmdz+W2Zt/TmTZq7clG5OOO3az84TYjfB4x3WrSTWX7fstpox3b7KjSH7M6omMOQyq97jl/Nr1xKXy+9knimJL7ONaxQFYNJ9dJE05SR7k7P6kRhTbv8LWiP8ACpM2mp28ftSZvfCPEyghe/kjjxhyuPX8w79wVkpl7lNMbVMpK/mXafzI4EtatzoAE5gW5S0FpLXhG4Vme3ie/WsHEbA4KSI1MjfBdNuxoiRhnaJ3qckgWHqna1mjOTTTJEMJWURA21hkWnIABYag//UxRlduo7fYLQ5c5NOUh0LmzAm2TQ87ac9GdEwQr5Fk+wrniRH0LoMniyHWqMosrC8Z+0V86Li5fNjEYrV8oOKX6kvLNshhsA5YLsqi5JTZUXfqPcjiGXEs20DQac0oUMnu6uBSSd0F5xn3HJvR+n/uDUTXy0Y/gehmj6a6R0OuXK0y8dVSawD+Ymj3VeVu9bDfx8+FxRez3Bigql3CTlOei+g026P9AUmwSnKC64F4IoNm+S833FP68dJIcl+Mt7B8hsl4JSkUG90SdBJr38Ysrw1TPyorwwr4YV290A9k+7OB5zUsybrY7uSPgfFkxcCwa1aqmQyTNx0VzVBg5A=
+#  skip_cleanup: true
+#  on:
+#    branch: deploy
+- provider: npm
+  local_dir: build
+  api_key: "bqrbUvAsPdMQ8Z7YcTPJ7Cb1BfxNOCnp0Zrb4kYUbnlyEzfQ9oTntSt1iKJlebga4IfqL6njzzKWaXBFqq/ISNcLnWUdTwI/Rl9TsUXQ8bc142/Q1r+j4U6ny+3vj237EDUjVG1iLkiSXJCrTe0myJjjq9YO3aRSCH0FRatdl1JEKgs6BVx0kUH5GayeeH8PfOkQqIa+bddYiEaaGbZr6IPF14OFdldMQ16fbA82iQRgwXmhp+NEaYnFGvfQa0GAailtvanl6iJdMgUV9iKneCiL3NAmagdomllFd+1tBzCOi/0ZHcfzUVNpgjtFKPosHB6QnGQqQIjE03Sw4UdLw0foWnknKn4mCUyhUjcMAw8pneP2B5e3IJfGUZiXdwE852CyeXKKhci50dz5KTJ5zxgKvvB09Azn4qCAjOd2lBKEEmqSfWGKKXF+lM+GRGmUkpRwRsnl7rYefauTQklPMwjmvade3ZaFsSFdIDWtWRtejYVIzNjvcDRxy6hHGYvkLz51zDSct8i0wZLKx/kyyLs/CTtJr8Khte62Ek2Y2z6lYaU+BBiQbpctjOnquxUJ4lR1O+NL8mij36HtUN9fK09sb18T7T/YRDGg7wczWfVOj3SmXQtL65G1aENghSCGhHoicM3g9Wnpqm/wp7CLQ/SWHE5D5ObbxkTfCGgrhS4="
+  skip_cleanup: true
+  on:
+    branch: deploy
+    #tags: true

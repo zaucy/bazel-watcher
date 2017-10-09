@@ -1,3 +1,5 @@
+// +build bazel
+
 package e2e
 
 import (

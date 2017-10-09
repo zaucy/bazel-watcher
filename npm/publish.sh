@@ -20,9 +20,19 @@ set -o pipefail
 # cd to the root of the project so that relative paths work.
 cd "$(git rev-parse --show-toplevel)"
 
-# Make a temporary directory to stage the release in.
-readonly STAGING="$(mktemp -d)"
+if [[ "${TRAVIS_CI}" == "true" ]]; then
+  # Build in $PWD/build. The .travis.yml will push root/build/bin to the
+  # releases page.
+  readonly STAGING="${PWD}/build"
+  mkdir -p "${STAGING}"
+else
+  # Make a temporary directory to stage the release in.
+  readonly STAGING="$(mktemp -d)"
+fi
 echo "Staging into ${STAGING}"
+
+# Installing dependencies
+go get -t ./...
 
 # Copy over the base files required for NPM
 cp "README.md" "${STAGING}/README.md"
@@ -32,6 +42,8 @@ cp "npm/package.json" "${STAGING}/package.json"
 compile() {
   export GOOS=$1; shift
   export GOARCH=$1; shift
+
+  echo "Building for $GOARCH on $GOOS"
 
   mkdir -p "${STAGING}/bin/${GOOS}_${GOARCH}/"
   DESTINATION="${STAGING}/bin/${GOOS}_${GOARCH}/ibazel"
@@ -44,7 +56,10 @@ compile() {
 # Now compiler ibazel for every platform/arch that is supported.
 compile "linux"   "amd64"
 compile "darwin"  "amd64"
-compile "windows" "amd64"
+# TODO: Make this compile for Windows.
+#compile "windows" "amd64"
 
-# Everything is staged now, actually upload the package.
-cd "$STAGING" && npm publish
+if [[ "${TRAVIS_CI}" != "true" ]]; then
+  # Everything is staged now, actually upload the package.
+  cd "$STAGING" && npm publish
+fi

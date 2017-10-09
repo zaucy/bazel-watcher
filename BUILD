@@ -18,5 +18,8 @@ go_prefix("github.com/bazelbuild/bazel-watcher")
 
 gazelle(
     name = "gazelle",
+    build_tags = [
+        "bazel",
+    ],
     prefix = "github.com/bazelbuild/bazel-watcher",
 )
