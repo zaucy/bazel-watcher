@@ -1,16 +1,22 @@
 ---
 platforms:
   ubuntu1404:
+    test_flags:
+    - "--test_tag_filters=-noci,-nobuildkite,-dev"
     build_targets:
     - "..."
     test_targets:
     - "..."
   ubuntu1604:
+    test_flags:
+    - "--test_tag_filters=-noci,-nobuildkite,-dev"
     build_targets:
     - "..."
     test_targets:
     - "..."
   macos:
+    test_flags:
+    - "--test_tag_filters=-noci,-nobuildkite,-dev"
     build_targets:
     - "..."
     test_targets:

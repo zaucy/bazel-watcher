@@ -12,6 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+http_archive(
+    name = "bazel_skylib",
+    sha256 = "b5f6abe419da897b7901f90cbab08af958b97a8f3575b0d3dd062ac7ce78541f",
+    strip_prefix = "bazel-skylib-0.5.0",
+    urls = [
+        "https://mirror.bazel.build/github.com/bazelbuild/bazel-skylib/archive/0.5.0.tar.gz",
+        "https://github.com/bazelbuild/bazel-skylib/archive/0.5.0.tar.gz",
+    ],
+)
+
 git_repository(
     name = "com_github_bazelbuild_bazel_integration_testing",
     commit = "55a6a70dbcc2cc7699ee715746fb1452788f8d3c",
@@ -22,19 +32,50 @@ load("@com_github_bazelbuild_bazel_integration_testing//tools:repositories.bzl",
 
 bazel_binaries()
 
-rules_go_commit = "74d8ad8f9f59a1d9a7cf066d0980f9e394acccd7"
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
-git_repository(
+rules_go_tag = "0.13.0"
+
+http_archive(
     name = "io_bazel_rules_go",
-    commit = rules_go_commit,
-    remote = "https://github.com/bazelbuild/rules_go",
+    sha256 = "ba79c532ac400cefd1859cbc8a9829346aa69e3b99482cd5a54432092cbc3933",
+    urls = ["https://github.com/bazelbuild/rules_go/releases/download/{tag}/rules_go-{tag}.tar.gz".format(tag = rules_go_tag)],
 )
 
-load("@io_bazel_rules_go//go:def.bzl", "go_rules_dependencies", "go_register_toolchains", "go_repository")
+load("@io_bazel_rules_go//go:def.bzl", "go_register_toolchains", "go_rules_dependencies")
 
 go_rules_dependencies()
 
 go_register_toolchains()
+
+load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies")
+
+gazelle_dependencies()
+
+git_repository(
+    name = "io_bazel_rules_webtesting",
+    commit = "c11e47ad49b90956b20c5b64ec1addea9a443096",
+    remote = "https://github.com/bazelbuild/rules_webtesting.git",
+)
+
+load(
+    "@io_bazel_rules_webtesting//web:repositories.bzl",
+    "browser_repositories",
+    "web_test_repositories",
+)
+
+web_test_repositories()
+
+# Load repositories for example browser definitions.
+# You should create your own browser definitions and link
+# to the specific browser versions you are interested in
+# testing with.
+browser_repositories(
+    chromium = True,
+    sauce = True,
+)
+
+load("@bazel_gazelle//:deps.bzl", "go_repository")
 
 go_repository(
     name = "com_github_fsnotify_fsnotify",
@@ -62,8 +103,8 @@ go_repository(
 
 go_repository(
     name = "com_github_bazelbuild_rules_go",
-    commit = rules_go_commit,
     importpath = "github.com/bazelbuild/rules_go",
+    tag = rules_go_tag,
 )
 
 go_repository(
@@ -76,4 +117,16 @@ go_repository(
     name = "com_github_gorilla_websocket",
     commit = "c55883f97322b4bcbf48f734e23d6ab3af1ea488",
     importpath = "github.com/gorilla/websocket",
+)
+
+go_repository(
+    name = "com_github_tebeka_selenium",
+    commit = "4bc91b5ff036f1cd12f315fd6042ecff6d94e512",
+    importpath = "github.com/tebeka/selenium",
+)
+
+go_repository(
+    name = "com_github_bazelbuild_rules_webtesting",
+    commit = "ca7b8062d9cf4ef2fde9193c7d37a0764c4262d7",
+    importpath = "github.com/bazelbuild/rules_webtesting",
 )

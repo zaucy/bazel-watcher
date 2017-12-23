@@ -6,12 +6,25 @@ osx_image: xcode8
 # Not technically required but suppresses 'Ruby' in Job status message.
 language: java
 
+addons:
+  sauce_connect:
+    username: "achew22"
+    # Yep this is the real access key associated with my account.
+    # This is my TODO to make that be something different but in
+    # the meantime the account doesn't have anything interesting.
+    access_key: "0e22c217-c7c8-49f8-8288-37576c1a1575"
+
+cache:
+  directories:
+  - "/home/travis/.bazel_repository_cache"
+
 os:
   - linux
   - osx
 
 env:
-  - V=0.10.0
+  global:
+    - V=0.15.0
 
 before_install:
   - |
@@ -38,6 +51,14 @@ before_install:
     else
       URL="https://github.com/bazelbuild/bazel/releases/download/${V}/bazel-${V}-installer-${OS}-x86_64.sh"
     fi
+
+    export TUNNEL_IDENTIFIER="${TRAVIS_JOB_NUMBER}"
+    export BUILD_TAG="${TRAVIS_COMMIT}"
+
+    if [[ "$TRAVIS_PULL_REQUEST" != "false" ]]; then
+      export ADDITIONAL_TEST_TAG_FILTERS=",-notravispr"
+    fi
+
     wget -O install.sh "${URL}"
     chmod +x install.sh
     ./install.sh --user
@@ -47,14 +68,15 @@ script:
   - |
     bazel \
       --output_base=$HOME/.cache/bazel \
-      --batch \
       --host_jvm_args=-Xmx500m \
       --host_jvm_args=-Xms500m \
       --bazelrc=.test-bazelrc \
       test \
-      --experimental_repository_cache="$HOME/.bazel_repository_cache" \
+      --experimental_repository_cache="/home/travis/.bazel_repository_cache" \
       --local_resources=400,1,1.0 \
-      --test_tag_filters=-dev \
+      --test_tag_filters="-noci,-notravis,-dev${ADDITIONAL_TEST_TAG_FILTERS}" \
+      --test_env=TUNNEL_IDENTIFIER="${TRAVIS_JOB_NUMBER}" \
+      --test_env=BUILD_TAG="${TRAVIS_COMMIT}" \
       //...
 
 notifications:

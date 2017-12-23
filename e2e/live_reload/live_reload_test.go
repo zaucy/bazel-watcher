@@ -1,9 +1,6 @@
 package live_reload
 
 import (
-	"net/http"
-	"net/url"
-	"io/ioutil"
 	"reflect"
 	"runtime/debug"
 	"strings"
@@ -12,15 +9,17 @@ import (
 
 	bazel "github.com/bazelbuild/bazel-integration-testing/go"
 	"github.com/bazelbuild/bazel-watcher/e2e"
+
 	"github.com/gorilla/websocket"
+
+	"github.com/bazelbuild/rules_webtesting/go/webtest"
+	"github.com/tebeka/selenium"
 )
 
 type liveReloadHello struct {
 	Command   string   `json:"command"`
 	Protocols []string `json:"protocols"`
 }
-
-const printLivereload = `printf "Live reload url: ${IBAZEL_LIVERELOAD_URL}"`
 
 func must(t *testing.T, e error) {
 	if e != nil {
@@ -61,14 +60,14 @@ func TestLiveReload(t *testing.T) {
 		t.Fatal(err)
 	}
 	must(t, b.ScratchFile("WORKSPACE", ""))
-	must(t, b.ScratchFileWithMode("test.sh", printLivereload, 0777))
+	must(t, b.ScratchFileWithMode("live_reload.py", string(python), 0777))
 	must(t, b.ScratchFile("test.txt", "1"))
 	must(t, b.ScratchFile("BUILD", `
-sh_binary(
+py_binary(
 	name = "live_reload",
-	srcs = ["test.sh"],
+	srcs = ["live_reload.py"],
 	data = ["test.txt"],
-	tags = ["ibazel_live_reload"],
+	tags = ["ibazel_notify_changes", "ibazel_live_reload"],
 )
 `))
 
@@ -76,85 +75,76 @@ sh_binary(
 	ibazel.Run("//:live_reload")
 	defer ibazel.Kill()
 
-	ibazel.ExpectOutput("Live reload url: http://.+:\\d+")
+	ibazel.ExpectOutput("Webserver url: http://.+:\\d+")
 	out := ibazel.GetOutput()
 	t.Logf("Output: '%s'", out)
 
-	jsUrl := out[len("Live reload url: "):]
-	t.Logf("Livereload URL: '%s'", jsUrl)
+	url := out[len("Webserver url: "):]
+	t.Logf("Webserver URL: '%s'", url)
 
-	url, err := url.ParseRequestURI(jsUrl)
-	if err != nil {
-		t.Error(err)
-	}
-
-	client := &http.Client{}
-	resp, err := client.Get(jsUrl)
+	wd, err := webtest.NewWebDriverSession(selenium.Capabilities{
+		"webdriver.logging.profiler.enabled": true,
+		"extendedDebugging":                  true,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer wd.Quit()
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
+	if err := wd.Get(url); err != nil {
+		t.Error(err)
 	}
 
-	bodyString := string(body)
-
-	expectedStart := "(function e(t,n,r)"
-	actualStart := bodyString[0:len(expectedStart)]
-	if actualStart != expectedStart {
-		t.Errorf("Expected js to start with \"%s\" but got \"%s\".", expectedStart, actualStart)
-	}
-
-	expectedEnd := "},{}]},{},[8]);"
-	actualEnd := bodyString[len(bodyString)-len(expectedEnd):]
-	if actualEnd != expectedEnd {
-		t.Errorf("Expected js to end with \"%s\" but got \"%s\".", expectedEnd, actualEnd)
-	}
-
-	wsUrl := "ws://" + url.Hostname() + ":" + url.Port() + "/livereload"
-	t.Logf("wsUrl: %s", wsUrl)
-	conn, _, err := websocket.DefaultDialer.Dial(wsUrl, map[string][]string{})
+	elem, err := wd.FindElement(selenium.ByTagName, "body")
 	if err != nil {
 		t.Error(err)
 	}
 
-	// Send the hello message to the client.
-	hello := liveReloadHello{
-		Command:   "hello",
-		Protocols: []string{"http://livereload.com/protocols/official-7"},
-	}
-	if err = conn.WriteJSON(hello); err != nil {
+	text, err := elem.Text()
+	if err != nil {
 		t.Error(err)
 	}
-
-	// Verify the hello message
-	verify(t, conn, `{"command":"hello","protocols":["http://livereload.com/protocols/official-7","http://livereload.com/protocols/official-8","http://livereload.com/protocols/official-9","http://livereload.com/protocols/2.x-origin-version-negotiation","http://livereload.com/protocols/2.x-remote-control"],"serverName":"live reload"}`)
+	assertEqual(t, "1", text, "Body text was different")
 
 	must(t, b.ScratchFile("test.txt", "2"))
-	ibazel.ExpectOutput("Live reload url: http://.+:\\d+")
+	time.Sleep(5 * time.Second)
+	elem, err = wd.FindElement(selenium.ByTagName, "body")
+	if err != nil {
+		t.Error(err)
+	}
 
-	verify(t, conn, `{"command":"reload","path":"reload","liveCSS":true}`)
+	text, err = elem.Text()
+	if err != nil {
+		t.Error(err)
+	}
+	assertEqual(t, "2", text, "Body text was different")
 
 	must(t, b.ScratchFile("test.txt", "3"))
-	ibazel.ExpectOutput("Live reload url: http://.+:\\d+")
+	time.Sleep(5 * time.Second)
+	elem, err = wd.FindElement(selenium.ByTagName, "body")
+	if err != nil {
+		t.Error(err)
+	}
 
-	verify(t, conn, `{"command":"reload","path":"reload","liveCSS":true}`)
+	text, err = elem.Text()
+	if err != nil {
+		t.Error(err)
+	}
+	assertEqual(t, "3", text, "Body text was different")
 }
 
 func TestNoLiveReload(t *testing.T) {
+	t.Skip()
 	b, err := bazel.New()
 	if err != nil {
 		t.Fatal(err)
 	}
 	must(t, b.ScratchFile("WORKSPACE", ""))
-	must(t, b.ScratchFileWithMode("test.sh", printLivereload, 0777))
+	must(t, b.ScratchFileWithMode("no_live_reload.py", string(python), 0777))
 	must(t, b.ScratchFile("BUILD", `
-sh_binary(
+py_binary(
 	name = "no_live_reload",
-	srcs = ["test.sh"],
+	srcs = ["no_live_reload.py"],
 )
 `))
 
@@ -163,5 +153,5 @@ sh_binary(
 	defer ibazel.Kill()
 
 	// Expect there to not be a url since this is the negative test case.
-	ibazel.ExpectOutput("Live reload url: $")
+	ibazel.ExpectOutput("Webserver url: $")
 }
