@@ -270,7 +270,7 @@ func (i *IBazel) iteration(command string, commandToRun runnableCommand, targets
 	switch i.state {
 	case WAIT:
 		select {
-		case e := <-i.sourceEventHandler.SourceFileEvents:
+		case e := <-i.sourceFileWatcher.Events():
 			if _, ok := i.filesWatched[i.sourceFileWatcher][e.Name]; ok && e.Op&modifyingEvents != 0 {
 				fmt.Fprintf(os.Stderr, "\nChanged: %q. Rebuilding...\n", e.Name)
 				i.changeDetected(targets, "source", e.Name)
@@ -301,7 +301,7 @@ func (i *IBazel) iteration(command string, commandToRun runnableCommand, targets
 		i.state = RUN
 	case DEBOUNCE_RUN:
 		select {
-		case e := <-i.sourceEventHandler.SourceFileEvents:
+		case e := <-i.sourceFileWatcher.Events():
 			if _, ok := i.filesWatched[i.sourceFileWatcher][e.Name]; ok && e.Op&modifyingEvents != 0 {
 				i.changeDetected(targets, "source", e.Name)
 			}
